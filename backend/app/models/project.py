@@ -46,6 +46,7 @@ class Project:
     
     # 配置
     simulation_requirement: Optional[str] = None
+    career_form: Optional[Dict[str, Any]] = None  # CareerVerse: 原始职业表单数据
     chunk_size: int = 500
     chunk_overlap: int = 50
     
@@ -67,6 +68,7 @@ class Project:
             "graph_id": self.graph_id,
             "graph_build_task_id": self.graph_build_task_id,
             "simulation_requirement": self.simulation_requirement,
+            "career_form": self.career_form,
             "chunk_size": self.chunk_size,
             "chunk_overlap": self.chunk_overlap,
             "error": self.error

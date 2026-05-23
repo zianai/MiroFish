@@ -1,11 +1,12 @@
 """
-OASIS Agent Profile生成器
+OASIS Agent Profile生成器（CareerVerse 职业平行宇宙版）
 将Zep图谱中的实体转换为OASIS模拟平台所需的Agent Profile格式
+每个Agent代表平行世界中的一个人物：另一个你、同事、导师、竞争对手等
 
 优化改进：
 1. 调用Zep检索功能二次丰富节点信息
-2. 优化提示词生成非常详细的人设
-3. 区分个人实体和抽象群体实体
+2. 优化提示词生成详细的平行世界人物卡
+3. 区分人物实体和组织/概念实体
 """
 
 import json
@@ -23,12 +24,12 @@ from ..utils.logger import get_logger
 from ..utils.locale import get_language_instruction, get_locale, set_locale, t
 from .zep_entity_reader import EntityNode, ZepEntityReader
 
-logger = get_logger('mirofish.oasis_profile')
+logger = get_logger('careerverse.oasis_profile')
 
 
 @dataclass
 class OasisAgentProfile:
-    """OASIS Agent Profile数据结构"""
+    """OASIS Agent Profile数据结构（CareerVerse 平行世界人物卡）"""
     # 通用字段
     user_id: int
     user_name: str
@@ -36,20 +37,22 @@ class OasisAgentProfile:
     bio: str
     persona: str
     
-    # 可选字段 - Reddit风格
+    # 可选字段 - Reddit风格（OASIS平台兼容）
     karma: int = 1000
     
-    # 可选字段 - Twitter风格
+    # 可选字段 - Twitter风格（OASIS平台兼容）
     friend_count: int = 100
     follower_count: int = 150
     statuses_count: int = 500
     
-    # 额外人设信息
+    # 平行世界人物特有字段
     age: Optional[int] = None
     gender: Optional[str] = None
     mbti: Optional[str] = None
     country: Optional[str] = None
     profession: Optional[str] = None
+    career_stage: Optional[str] = None         # 职业阶段：early/mid/senior/late
+    alternate_choice: Optional[str] = None     # 平行世界中的不同选择
     interested_topics: List[str] = field(default_factory=list)
     
     # 来源实体信息
@@ -133,6 +136,8 @@ class OasisAgentProfile:
             "mbti": self.mbti,
             "country": self.country,
             "profession": self.profession,
+            "career_stage": self.career_stage,
+            "alternate_choice": self.alternate_choice,
             "interested_topics": self.interested_topics,
             "source_entity_uuid": self.source_entity_uuid,
             "source_entity_type": self.source_entity_type,
@@ -142,14 +147,15 @@ class OasisAgentProfile:
 
 class OasisProfileGenerator:
     """
-    OASIS Profile生成器
+    OASIS Profile生成器（CareerVerse 职业平行宇宙版）
     
     将Zep图谱中的实体转换为OASIS模拟所需的Agent Profile
+    每个Profile代表平行世界中的一个人物或组织
     
     优化特性：
     1. 调用Zep图谱检索功能获取更丰富的上下文
-    2. 生成非常详细的人设（包括基本信息、职业经历、性格特征、社交媒体行为等）
-    3. 区分个人实体和抽象群体实体
+    2. 生成详细的平行世界人物卡（包括职业轨迹、人生状态、性格特征等）
+    3. 区分人物实体和组织/概念实体
     """
     
     # MBTI类型列表
@@ -166,16 +172,18 @@ class OasisProfileGenerator:
         "Canada", "Australia", "Brazil", "India", "South Korea"
     ]
     
-    # 个人类型实体（需要生成具体人设）
+    # 人物类型实体（需要生成具体平行世界人物卡）
     INDIVIDUAL_ENTITY_TYPES = [
-        "student", "alumni", "professor", "person", "publicfigure", 
-        "expert", "faculty", "official", "journalist", "activist"
+        "person", "colleague", "mentor", "competitor", "leader",
+        "entrepreneur", "rolemodel", "employee", "manager", "student",
+        "expert", "professional", "careerpath"
     ]
     
-    # 群体/机构类型实体（需要生成群体代表人设）
+    # 组织/概念类型实体（需要生成组织/概念描述）
     GROUP_ENTITY_TYPES = [
-        "university", "governmentagency", "organization", "ngo", 
-        "mediaoutlet", "company", "institution", "group", "community"
+        "company", "organization", "industry", "university", "institution",
+        "educationinstitution", "governmentagency", "ngo", "community",
+        "group", "mediaoutlet"
     ]
     
     def __init__(
@@ -258,7 +266,7 @@ class OasisProfileGenerator:
             user_name=user_name,
             name=name,
             bio=profile_data.get("bio", f"{entity_type}: {name}"),
-            persona=profile_data.get("persona", entity.summary or f"A {entity_type} named {name}."),
+            persona=profile_data.get("persona", entity.summary or f"平行世界中的{entity_type}: {name}"),
             karma=profile_data.get("karma", random.randint(500, 5000)),
             friend_count=profile_data.get("friend_count", random.randint(50, 500)),
             follower_count=profile_data.get("follower_count", random.randint(100, 1000)),
@@ -268,6 +276,8 @@ class OasisProfileGenerator:
             mbti=profile_data.get("mbti"),
             country=profile_data.get("country"),
             profession=profile_data.get("profession"),
+            career_stage=profile_data.get("career_stage"),
+            alternate_choice=profile_data.get("alternate_choice"),
             interested_topics=profile_data.get("interested_topics", []),
             source_entity_uuid=entity.uuid,
             source_entity_type=entity_type,
@@ -671,7 +681,7 @@ class OasisProfileGenerator:
     
     def _get_system_prompt(self, is_individual: bool) -> str:
         """获取系统提示词"""
-        base_prompt = "你是社交媒体用户画像生成专家。生成详细、真实的人设用于舆论模拟,最大程度还原已有现实情况。必须返回有效的JSON格式，所有字符串值不能包含未转义的换行符。"
+        base_prompt = "你是平行宇宙人生模拟专家。你的任务是为职业平行宇宙中的每个角色生成详细、真实的人物设定，用于模拟'如果当初做了不同选择'的平行人生。必须返回有效的JSON格式，所有字符串值不能包含未转义的换行符。"
         return f"{base_prompt}\n\n{get_language_instruction()}"
     
     def _build_individual_persona_prompt(
@@ -682,45 +692,51 @@ class OasisProfileGenerator:
         entity_attributes: Dict[str, Any],
         context: str
     ) -> str:
-        """构建个人实体的详细人设提示词"""
+        """构建平行世界人物实体的详细人物卡提示词"""
         
         attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "无"
         context_str = context[:3000] if context else "无额外上下文"
         
-        return f"""为实体生成详细的社交媒体用户人设,最大程度还原已有现实情况。
+        return f"""为平行世界中的角色生成详细的人物设定卡。
+
+我们正在构建一个职业平行宇宙模拟系统。用户在现实中做出了某些职业选择，现在我们要模拟"如果当初做了不同选择"会怎样。每个实体代表平行世界中的一个人物。
 
 实体名称: {entity_name}
 实体类型: {entity_type}
 实体摘要: {entity_summary}
 实体属性: {attrs_str}
 
-上下文信息:
+上下文信息（来自知识图谱，包含用户真实经历和平行世界设定）:
 {context_str}
 
 请生成JSON，包含以下字段:
 
-1. bio: 社交媒体简介，200字
-2. persona: 详细人设描述（2000字的纯文本），需包含:
-   - 基本信息（年龄、职业、教育背景、所在地）
-   - 人物背景（重要经历、与事件的关联、社会关系）
-   - 性格特征（MBTI类型、核心性格、情绪表达方式）
-   - 社交媒体行为（发帖频率、内容偏好、互动风格、语言特点）
-   - 立场观点（对话题的态度、可能被激怒/感动的内容）
-   - 独特特征（口头禅、特殊经历、个人爱好）
-   - 个人记忆（人设的重要部分，要介绍这个个体与事件的关联，以及这个个体在事件中的已有动作与反应）
+1. bio: 人物简介（100-200字），描述这个人在平行世界中的身份和状态
+2. persona: 详细人物设定（2000字的纯文本），需包含:
+   - 基本信息（年龄、职业、教育背景、所在城市）
+   - 平行世界中的职业发展轨迹（与现实中不同的发展路径）
+   - 当前生活状态（职位、收入水平、住房、社交圈）
+   - 性格特征（MBTI类型、核心性格、处事风格）
+   - 关键人生决策（在哪些节点做了什么选择，导致了现在的状态）
+   - 人生满意度和内心感受（对现状的看法、遗憾、成就感）
+   - 与用户（现实中的"本体"）的关系或对比
+   - 个人记忆（这个角色在平行世界中的关键经历和感受）
 3. age: 年龄数字（必须是整数）
 4. gender: 性别，必须是英文: "male" 或 "female"
 5. mbti: MBTI类型（如INTJ、ENFP等）
 6. country: 国家（使用中文，如"中国"）
-7. profession: 职业
-8. interested_topics: 感兴趣话题数组
+7. profession: 职业名称
+8. career_stage: 职业阶段，必须是以下之一: "early"(1-3年), "mid"(4-10年), "senior"(11-20年), "late"(20年以上)
+9. alternate_choice: 这个角色在分叉点做的不同选择（一句话描述，如"选择了考研而不是直接工作"）
+10. interested_topics: 关注的领域和话题数组
 
 重要:
 - 所有字段值必须是字符串或数字，不要使用换行符
 - persona必须是一段连贯的文字描述
 - {get_language_instruction()} (gender字段必须用英文male/female)
-- 内容要与实体信息保持一致
+- 人物设定要真实可信，有血有肉，不是完美的，要有挣扎和矛盾
 - age必须是有效的整数，gender必须是"male"或"female"
+- 重点刻画"不同选择"带来的生活差异，这是产品核心价值
 """
 
     def _build_group_persona_prompt(
@@ -731,12 +747,14 @@ class OasisProfileGenerator:
         entity_attributes: Dict[str, Any],
         context: str
     ) -> str:
-        """构建群体/机构实体的详细人设提示词"""
+        """构建组织/机构实体的平行世界设定提示词"""
         
         attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "无"
         context_str = context[:3000] if context else "无额外上下文"
         
-        return f"""为机构/群体实体生成详细的社交媒体账号设定,最大程度还原已有现实情况。
+        return f"""为平行世界中的组织/机构生成详细设定。
+
+我们正在构建一个职业平行宇宙模拟系统。这个组织/机构存在于用户的平行世界中，可能是平行世界中的雇主、学校、行业等。
 
 实体名称: {entity_name}
 实体类型: {entity_type}
@@ -748,28 +766,28 @@ class OasisProfileGenerator:
 
 请生成JSON，包含以下字段:
 
-1. bio: 官方账号简介，200字，专业得体
-2. persona: 详细账号设定描述（2000字的纯文本），需包含:
-   - 机构基本信息（正式名称、机构性质、成立背景、主要职能）
-   - 账号定位（账号类型、目标受众、核心功能）
-   - 发言风格（语言特点、常用表达、禁忌话题）
-   - 发布内容特点（内容类型、发布频率、活跃时间段）
-   - 立场态度（对核心话题的官方立场、面对争议的处理方式）
-   - 特殊说明（代表的群体画像、运营习惯）
-   - 机构记忆（机构人设的重要部分，要介绍这个机构与事件的关联，以及这个机构在事件中的已有动作与反应）
-3. age: 固定填30（机构账号的虚拟年龄）
-4. gender: 固定填"other"（机构账号使用other表示非个人）
-5. mbti: MBTI类型，用于描述账号风格，如ISTJ代表严谨保守
+1. bio: 组织简介（100-200字），描述这个组织在平行世界中的定位
+2. persona: 详细组织设定描述（1500字的纯文本），需包含:
+   - 组织基本信息（名称、性质、规模、成立背景）
+   - 在平行世界中的角色（与现实中有什么不同）
+   - 组织文化和发展方向
+   - 对员工/成员的影响（工作氛围、晋升机制、薪酬水平）
+   - 与用户职业发展的关联
+3. age: 固定填30（组织虚拟年龄）
+4. gender: 固定填"other"（组织使用other表示非个人）
+5. mbti: MBTI类型，用于描述组织风格（如ISTJ=严谨保守, ENTP=创新灵活）
 6. country: 国家（使用中文，如"中国"）
-7. profession: 机构职能描述
-8. interested_topics: 关注领域数组
+7. profession: 组织核心业务描述
+8. career_stage: 固定填"senior"
+9. alternate_choice: 这个组织在平行世界中与现实的不同之处（一句话）
+10. interested_topics: 关注领域数组
 
 重要:
 - 所有字段值必须是字符串或数字，不允许null值
 - persona必须是一段连贯的文字描述，不要使用换行符
 - {get_language_instruction()} (gender字段必须用英文"other")
 - age必须是整数30，gender必须是字符串"other"
-- 机构账号发言要符合其身份定位"""
+- 重点描述组织在平行世界中的独特之处"""
     
     def _generate_profile_rule_based(
         self,
@@ -778,70 +796,66 @@ class OasisProfileGenerator:
         entity_summary: str,
         entity_attributes: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """使用规则生成基础人设"""
+        """使用规则生成基础人物卡"""
         
-        # 根据实体类型生成不同的人设
+        # 根据实体类型生成不同的平行世界人物设定
         entity_type_lower = entity_type.lower()
         
-        if entity_type_lower in ["student", "alumni"]:
+        if entity_type_lower in ["colleague", "mentor", "leader", "competitor", "person"]:
             return {
-                "bio": f"{entity_type} with interests in academics and social issues.",
-                "persona": f"{entity_name} is a {entity_type.lower()} who is actively engaged in academic and social discussions. They enjoy sharing perspectives and connecting with peers.",
-                "age": random.randint(18, 30),
+                "bio": f"平行世界中的{entity_name}，职业发展轨迹与现实截然不同。",
+                "persona": f"{entity_name}是平行世界中的一位{entity_type}。在这个世界里，TA做出了不同的职业选择，走上了另一条道路。TA有着独特的职业经历和人生感悟，与现实中的状态形成了鲜明对比。TA在工作中遇到过不同的机遇和挑战，也结交了不同的同事和朋友。",
+                "age": random.randint(25, 45),
                 "gender": random.choice(["male", "female"]),
                 "mbti": random.choice(self.MBTI_TYPES),
                 "country": random.choice(self.COUNTRIES),
-                "profession": "Student",
-                "interested_topics": ["Education", "Social Issues", "Technology"],
+                "profession": entity_attributes.get("profession", "Professional"),
+                "career_stage": random.choice(["early", "mid", "senior"]),
+                "alternate_choice": "选择了不同的职业发展方向",
+                "interested_topics": ["职业发展", "行业趋势", "生活感悟"],
             }
         
-        elif entity_type_lower in ["publicfigure", "expert", "faculty"]:
+        elif entity_type_lower in ["entrepreneur", "rolemodel", "expert"]:
             return {
-                "bio": f"Expert and thought leader in their field.",
-                "persona": f"{entity_name} is a recognized {entity_type.lower()} who shares insights and opinions on important matters. They are known for their expertise and influence in public discourse.",
-                "age": random.randint(35, 60),
+                "bio": f"平行世界中的{entity_name}，在另一个选择下成为了行业中的关键人物。",
+                "persona": f"{entity_name}在平行世界中是一位{entity_type}。TA在这个世界里抓住了不同的机会，达到了不同的高度。TA的经历展示了'另一种可能'的力量。",
+                "age": random.randint(35, 55),
                 "gender": random.choice(["male", "female"]),
                 "mbti": random.choice(["ENTJ", "INTJ", "ENTP", "INTP"]),
                 "country": random.choice(self.COUNTRIES),
-                "profession": entity_attributes.get("occupation", "Expert"),
-                "interested_topics": ["Politics", "Economics", "Culture & Society"],
+                "profession": entity_attributes.get("profession", "Industry Expert"),
+                "career_stage": "senior",
+                "alternate_choice": "抓住了不同的时代机遇",
+                "interested_topics": ["行业洞察", "领导力", "战略规划"],
             }
         
-        elif entity_type_lower in ["mediaoutlet", "socialmediaplatform"]:
+        elif entity_type_lower in ["company", "organization", "industry"]:
             return {
-                "bio": f"Official account for {entity_name}. News and updates.",
-                "persona": f"{entity_name} is a media entity that reports news and facilitates public discourse. The account shares timely updates and engages with the audience on current events.",
-                "age": 30,  # 机构虚拟年龄
-                "gender": "other",  # 机构使用other
-                "mbti": "ISTJ",  # 机构风格：严谨保守
-                "country": "中国",
-                "profession": "Media",
-                "interested_topics": ["General News", "Current Events", "Public Affairs"],
-            }
-        
-        elif entity_type_lower in ["university", "governmentagency", "ngo", "organization"]:
-            return {
-                "bio": f"Official account of {entity_name}.",
-                "persona": f"{entity_name} is an institutional entity that communicates official positions, announcements, and engages with stakeholders on relevant matters.",
-                "age": 30,  # 机构虚拟年龄
-                "gender": "other",  # 机构使用other
-                "mbti": "ISTJ",  # 机构风格：严谨保守
+                "bio": f"平行世界中的{entity_name}，在这个世界里有着不同的发展轨迹。",
+                "persona": f"{entity_name}是平行世界中的一个{entity_type}。在这个世界里，它的发展方向、规模、影响力都可能与现实不同。它是构成平行职业生态的重要一环。",
+                "age": 30,
+                "gender": "other",
+                "mbti": "ISTJ",
                 "country": "中国",
                 "profession": entity_type,
-                "interested_topics": ["Public Policy", "Community", "Official Announcements"],
+                "career_stage": "senior",
+                "alternate_choice": "在平行世界中走上了不同的发展道路",
+                "interested_topics": ["行业发展", "市场趋势", "人才战略"],
             }
         
         else:
-            # 默认人设
+            # 默认人物设定
             return {
-                "bio": entity_summary[:150] if entity_summary else f"{entity_type}: {entity_name}",
-                "persona": entity_summary or f"{entity_name} is a {entity_type.lower()} participating in social discussions.",
+                "bio": entity_summary[:150] if entity_summary else f"平行世界中的{entity_type}: {entity_name}",
+                "persona": entity_summary or f"{entity_name}是平行世界中的一个{entity_type.lower()}，在这个世界里走出了不一样的职业人生。",
                 "age": random.randint(25, 50),
                 "gender": random.choice(["male", "female"]),
                 "mbti": random.choice(self.MBTI_TYPES),
                 "country": random.choice(self.COUNTRIES),
                 "profession": entity_type,
-                "interested_topics": ["General", "Social Issues"],
+                "career_stage": random.choice(["early", "mid", "senior"]),
+                "alternate_choice": "做出了不同的人生选择",
+                "interested_topics": ["职业发展", "人生感悟"],
             }
     
     def set_graph_id(self, graph_id: str):
@@ -944,15 +958,15 @@ class OasisProfileGenerator:
                     user_name=self._generate_username(entity.name),
                     name=entity.name,
                     bio=f"{entity_type}: {entity.name}",
-                    persona=entity.summary or f"A participant in social discussions.",
+                    persona=entity.summary or f"平行世界中的一个参与者。",
                     source_entity_uuid=entity.uuid,
                     source_entity_type=entity_type,
                 )
                 return idx, fallback_profile, str(e)
         
-        logger.info(f"开始并行生成 {total} 个Agent人设（并行数: {parallel_count}）...")
+        logger.info(f"开始并行生成 {total} 个平行世界人物卡（并行数: {parallel_count}）...")
         print(f"\n{'='*60}")
-        print(f"开始生成Agent人设 - 共 {total} 个实体，并行数: {parallel_count}")
+        print(f"开始生成平行世界人物卡 - 共 {total} 个实体，并行数: {parallel_count}")
         print(f"{'='*60}\n")
         
         # 使用线程池并行执行
@@ -1000,7 +1014,7 @@ class OasisProfileGenerator:
                         user_name=self._generate_username(entity.name),
                         name=entity.name,
                         bio=f"{entity_type}: {entity.name}",
-                        persona=entity.summary or "A participant in social discussions.",
+                        persona=entity.summary or "平行世界中的一个参与者。",
                         source_entity_uuid=entity.uuid,
                         source_entity_type=entity_type,
                     )
@@ -1008,7 +1022,7 @@ class OasisProfileGenerator:
                     save_profiles_realtime()
         
         print(f"\n{'='*60}")
-        print(f"人设生成完成！共生成 {len([p for p in profiles if p])} 个Agent")
+        print(f"人物卡生成完成！共生成 {len([p for p in profiles if p])} 个平行世界人物")
         print(f"{'='*60}\n")
         
         return profiles

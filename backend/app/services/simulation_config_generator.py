@@ -1,5 +1,5 @@
 """
-模拟配置智能生成器
+职业平行宇宙模拟配置智能生成器
 使用LLM根据模拟需求、文档内容、图谱信息自动生成细致的模拟参数
 实现全程自动化，无需人工设置参数
 
@@ -23,89 +23,92 @@ from ..utils.logger import get_logger
 from ..utils.locale import get_language_instruction, t
 from .zep_entity_reader import EntityNode, ZepEntityReader
 
-logger = get_logger('mirofish.simulation_config')
+logger = get_logger('careerverse.simulation_config')
 
-# 中国作息时间配置（北京时间）
+# 职业活跃度阶段配置（对应不同职业发展阶段）
 CHINA_TIMEZONE_CONFIG = {
-    # 深夜时段（几乎无人活动）
+    # 职业低谷期（几乎无职业活动）
     "dead_hours": [0, 1, 2, 3, 4, 5],
-    # 早间时段（逐渐醒来）
+    # 职业起步期（逐渐活跃）
     "morning_hours": [6, 7, 8],
-    # 工作时段
+    # 职业发展期
     "work_hours": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-    # 晚间高峰（最活跃）
+    # 职业高峰期（最活跃）
     "peak_hours": [19, 20, 21, 22],
-    # 夜间时段（活跃度下降）
+    # 职业调整期（活跃度下降）
     "night_hours": [23],
     # 活跃度系数
     "activity_multipliers": {
-        "dead": 0.05,      # 凌晨几乎无人
-        "morning": 0.4,    # 早间逐渐活跃
-        "work": 0.7,       # 工作时段中等
-        "peak": 1.5,       # 晚间高峰
-        "night": 0.5       # 深夜下降
+        "dead": 0.05,      # 低谷期几乎无活动
+        "morning": 0.4,    # 起步期逐渐活跃
+        "work": 0.7,       # 发展期中等活跃
+        "peak": 1.5,       # 高峰期最活跃
+        "night": 0.5       # 调整期活跃度下降
     }
 }
 
 
 @dataclass
 class AgentActivityConfig:
-    """单个Agent的活动配置"""
+    """单个Agent的职业活动配置"""
     agent_id: int
     entity_uuid: str
     entity_name: str
     entity_type: str
     
-    # 活跃度配置 (0.0-1.0)
-    activity_level: float = 0.5  # 整体活跃度
+    # 职业活跃度配置 (0.0-1.0)
+    activity_level: float = 0.5  # 整体职业活跃度
     
-    # 发言频率（每小时预期发言次数）
+    # 职业事件频率（每小时预期职业事件次数）
     posts_per_hour: float = 1.0
     comments_per_hour: float = 2.0
     
     # 活跃时间段（24小时制，0-23）
     active_hours: List[int] = field(default_factory=lambda: list(range(8, 23)))
     
-    # 响应速度（对热点事件的反应延迟，单位：模拟分钟）
+    # 响应速度（对职业事件的反应延迟，单位：模拟分钟）
     response_delay_min: int = 5
     response_delay_max: int = 60
     
     # 情感倾向 (-1.0到1.0，负面到正面)
     sentiment_bias: float = 0.0
     
-    # 立场（对特定话题的态度）
+    # 立场（对特定职业话题的态度）
     stance: str = "neutral"  # supportive, opposing, neutral, observer
     
-    # 影响力权重（决定其发言被其他Agent看到的概率）
+    # 影响力权重（决定其职业决策被其他Agent关注的概率）
     influence_weight: float = 1.0
 
 
 @dataclass  
 class TimeSimulationConfig:
-    """时间模拟配置（基于中国人作息习惯）"""
+    """时间模拟配置（基于职业平行宇宙发展阶段）"""
     # 模拟总时长（模拟小时数）
     total_simulation_hours: int = 72  # 默认模拟72小时（3天）
     
-    # 每轮代表的时间（模拟分钟）- 默认60分钟（1小时），加快时间流速
-    minutes_per_round: int = 60
+    # 模拟起始时刻（24小时制），避免凌晨开始导致前几轮空转
+    start_hour: int = 8
+    
+    # 每轮代表的时间（模拟分钟）- 30分钟一轮，更快推进时间
+    minutes_per_round: int = 30
     
     # 每小时激活的Agent数量范围
     agents_per_hour_min: int = 5
     agents_per_hour_max: int = 20
     
-    # 高峰时段（晚间19-22点，中国人最活跃的时间）
+    # 职业高峰期（发展最活跃阶段）
     peak_hours: List[int] = field(default_factory=lambda: [19, 20, 21, 22])
     peak_activity_multiplier: float = 1.5
     
-    # 低谷时段（凌晨0-5点，几乎无人活动）
+    # 职业低谷期（几乎无职业活动）
     off_peak_hours: List[int] = field(default_factory=lambda: [0, 1, 2, 3, 4, 5])
-    off_peak_activity_multiplier: float = 0.05  # 凌晨活跃度极低
+    off_peak_activity_multiplier: float = 0.05  # 低谷期职业活跃度极低
     
-    # 早间时段
+    # 职业起步期
     morning_hours: List[int] = field(default_factory=lambda: [6, 7, 8])
     morning_activity_multiplier: float = 0.4
     
-    # 工作时段
+    # 职业发展期
     work_hours: List[int] = field(default_factory=lambda: [9, 10, 11, 12, 13, 14, 15, 16, 17, 18])
     work_activity_multiplier: float = 0.7
 
@@ -119,16 +122,16 @@ class EventConfig:
     # 定时事件（在特定时间触发的事件）
     scheduled_events: List[Dict[str, Any]] = field(default_factory=list)
     
-    # 热点话题关键词
+    # 职业话题关键词
     hot_topics: List[str] = field(default_factory=list)
     
-    # 舆论引导方向
+    # 职业发展引导方向
     narrative_direction: str = ""
 
 
 @dataclass
 class PlatformConfig:
-    """平台特定配置"""
+    """平台特定配置（职业平行宇宙互动平台）"""
     platform: str  # twitter or reddit
     
     # 推荐算法权重
@@ -145,7 +148,7 @@ class PlatformConfig:
 
 @dataclass
 class SimulationParameters:
-    """完整的模拟参数配置"""
+    """完整的职业平行宇宙模拟参数配置"""
     # 基础信息
     simulation_id: str
     project_id: str
@@ -199,10 +202,10 @@ class SimulationParameters:
 
 class SimulationConfigGenerator:
     """
-    模拟配置智能生成器
+    职业平行宇宙模拟配置智能生成器
     
     使用LLM分析模拟需求、文档内容、图谱实体信息，
-    自动生成最佳的模拟参数配置
+    自动生成最佳的职业平行宇宙模拟参数配置
     
     采用分步生成策略：
     1. 生成时间配置和事件配置（轻量级）
@@ -327,8 +330,8 @@ class SimulationConfigGenerator:
         
         reasoning_parts.append(t('progress.agentConfigResult', count=len(all_agent_configs)))
         
-        # ========== 为初始帖子分配发布者 Agent ==========
-        logger.info("为初始帖子分配合适的发布者 Agent...")
+        # ========== 为初始职业事件分配发起者 Agent ==========
+        logger.info("为初始职业事件分配合适的发起者 Agent...")
         event_config = self._assign_initial_post_agents(event_config, all_agent_configs)
         assigned_count = len([p for p in event_config.initial_posts if p.get("poster_agent_id") is not None])
         reasoning_parts.append(t('progress.postAssignResult', count=assigned_count))
@@ -547,45 +550,46 @@ class SimulationConfigGenerator:
 ## 任务
 请生成时间配置JSON。
 
-### 基本原则（仅供参考，需根据具体事件和参与群体灵活调整）：
-- 请根据模拟场景推断目标用户群体所在时区和作息习惯，以下为东八区(UTC+8)的参考示例
-- 凌晨0-5点几乎无人活动（活跃度系数0.05）
-- 早上6-8点逐渐活跃（活跃度系数0.4）
-- 工作时间9-18点中等活跃（活跃度系数0.7）
-- 晚间19-22点是高峰期（活跃度系数1.5）
+### 基本原则（仅供参考，需根据具体职业场景和参与群体灵活调整）：
+- 请根据模拟场景推断目标群体的职业发展阶段和活跃模式，以下为参考示例
+- 低谷期0-5点几乎无职业活动（活跃度系数0.05）
+- 起步期6-8点逐渐活跃（活跃度系数0.4）
+- 发展期9-18点中等活跃（活跃度系数0.7）
+- 高峰期19-22点是最活跃阶段（活跃度系数1.5）
 - 23点后活跃度下降（活跃度系数0.5）
-- 一般规律：凌晨低活跃、早间渐增、工作时段中等、晚间高峰
-- **重要**：以下示例值仅供参考，你需要根据事件性质、参与群体特点来调整具体时段
-  - 例如：学生群体高峰可能是21-23点；媒体全天活跃；官方机构只在工作时间
-  - 例如：突发热点可能导致深夜也有讨论，off_peak_hours 可适当缩短
+- 一般规律：低谷期低活跃、起步期渐增、发展期中等、高峰期最活跃
+- **重要**：以下示例值仅供参考，你需要根据职业场景性质、参与群体特点来调整具体阶段
+  - 例如：初创团队高峰可能是21-23点；行业资深人士全天活跃；大型机构主要在工作时间
+  - 例如：重大职业变动可能导致低谷期也有活动，off_peak_hours 可适当缩短
 
 ### 返回JSON格式（不要markdown）
 
 示例：
 {{
     "total_simulation_hours": 72,
-    "minutes_per_round": 60,
+    "start_hour": 8,
+    "minutes_per_round": 30,
     "agents_per_hour_min": 5,
     "agents_per_hour_max": 50,
     "peak_hours": [19, 20, 21, 22],
     "off_peak_hours": [0, 1, 2, 3, 4, 5],
     "morning_hours": [6, 7, 8],
     "work_hours": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-    "reasoning": "针对该事件的时间配置说明"
+    "reasoning": "针对该职业场景的时间配置说明"
 }}
 
 字段说明：
-- total_simulation_hours (int): 模拟总时长，24-168小时，突发事件短、持续话题长
+- total_simulation_hours (int): 模拟总时长，24-168小时，短期职业事件短、长期职业发展长
 - minutes_per_round (int): 每轮时长，30-120分钟，建议60分钟
 - agents_per_hour_min (int): 每小时最少激活Agent数（取值范围: 1-{max_agents_allowed}）
 - agents_per_hour_max (int): 每小时最多激活Agent数（取值范围: 1-{max_agents_allowed}）
-- peak_hours (int数组): 高峰时段，根据事件参与群体调整
-- off_peak_hours (int数组): 低谷时段，通常深夜凌晨
-- morning_hours (int数组): 早间时段
-- work_hours (int数组): 工作时段
+- peak_hours (int数组): 职业高峰期，根据场景参与群体调整
+- off_peak_hours (int数组): 职业低谷期，通常对应低活跃阶段
+- morning_hours (int数组): 职业起步期
+- work_hours (int数组): 职业发展期
 - reasoning (string): 简要说明为什么这样配置"""
 
-        system_prompt = "你是社交媒体模拟专家。返回纯JSON格式，时间配置需符合模拟场景中目标用户群体的作息习惯。"
+        system_prompt = "你是职业平行宇宙模拟专家。返回纯JSON格式，时间配置需符合模拟场景中目标群体的职业活跃规律。"
         system_prompt = f"{system_prompt}\n\n{get_language_instruction()}"
 
         try:
@@ -595,17 +599,18 @@ class SimulationConfigGenerator:
             return self._get_default_time_config(num_entities)
     
     def _get_default_time_config(self, num_entities: int) -> Dict[str, Any]:
-        """获取默认时间配置（中国人作息）"""
+        """获取默认时间配置（职业平行宇宙标准阶段）"""
         return {
             "total_simulation_hours": 72,
-            "minutes_per_round": 60,  # 每轮1小时，加快时间流速
+            "start_hour": 8,
+            "minutes_per_round": 30,
             "agents_per_hour_min": max(1, num_entities // 15),
             "agents_per_hour_max": max(5, num_entities // 5),
             "peak_hours": [19, 20, 21, 22],
             "off_peak_hours": [0, 1, 2, 3, 4, 5],
             "morning_hours": [6, 7, 8],
             "work_hours": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-            "reasoning": "使用默认中国人作息配置（每轮1小时）"
+            "reasoning": "使用默认职业活跃度阶段配置（每轮1小时）"
         }
     
     def _parse_time_config(self, result: Dict[str, Any], num_entities: int) -> TimeSimulationConfig:
@@ -630,12 +635,13 @@ class SimulationConfigGenerator:
         
         return TimeSimulationConfig(
             total_simulation_hours=result.get("total_simulation_hours", 72),
-            minutes_per_round=result.get("minutes_per_round", 60),  # 默认每轮1小时
+            start_hour=result.get("start_hour", 8),
+            minutes_per_round=result.get("minutes_per_round", 30),
             agents_per_hour_min=agents_per_hour_min,
             agents_per_hour_max=agents_per_hour_max,
             peak_hours=result.get("peak_hours", [19, 20, 21, 22]),
             off_peak_hours=result.get("off_peak_hours", [0, 1, 2, 3, 4, 5]),
-            off_peak_activity_multiplier=0.05,  # 凌晨几乎无人
+            off_peak_activity_multiplier=0.05,  # 低谷期几乎无职业活动
             morning_hours=result.get("morning_hours", [6, 7, 8]),
             morning_activity_multiplier=0.4,
             work_hours=result.get("work_hours", list(range(9, 19))),
@@ -684,25 +690,25 @@ class SimulationConfigGenerator:
 
 ## 任务
 请生成事件配置JSON：
-- 提取热点话题关键词
-- 描述舆论发展方向
-- 设计初始帖子内容，**每个帖子必须指定 poster_type（发布者类型）**
+- 提取职业话题关键词
+- 描述职业发展方向
+- 设计初始职业事件内容，**每个事件必须指定 poster_type（发起者类型）**
 
-**重要**: poster_type 必须从上面的"可用实体类型"中选择，这样初始帖子才能分配给合适的 Agent 发布。
-例如：官方声明应由 Official/University 类型发布，新闻由 MediaOutlet 发布，学生观点由 Student 发布。
+**重要**: poster_type 必须从上面的"可用实体类型"中选择，这样初始职业事件才能分配给合适的 Agent 发起。
+例如：官方声明应由 Official/University 类型发起，行业动态由 MediaOutlet 发布，个人职业观点由 Student 发布。
 
 返回JSON格式（不要markdown）：
 {{
     "hot_topics": ["关键词1", "关键词2", ...],
-    "narrative_direction": "<舆论发展方向描述>",
+    "narrative_direction": "<职业发展方向描述>",
     "initial_posts": [
-        {{"content": "帖子内容", "poster_type": "实体类型（必须从可用类型中选择）"}},
+        {{"content": "职业事件内容", "poster_type": "实体类型（必须从可用类型中选择）"}},
         ...
     ],
     "reasoning": "<简要说明>"
 }}"""
 
-        system_prompt = "你是舆论分析专家。返回纯JSON格式。注意 poster_type 必须精确匹配可用实体类型。"
+        system_prompt = "你是职业发展分析专家。返回纯JSON格式。注意 poster_type 必须精确匹配可用实体类型。"
         system_prompt = f"{system_prompt}\n\n{get_language_instruction()}\nIMPORTANT: The 'poster_type' field value MUST be in English PascalCase exactly matching the available entity types. Only 'content', 'narrative_direction', 'hot_topics' and 'reasoning' fields should use the specified language."
 
         try:
@@ -731,9 +737,9 @@ class SimulationConfigGenerator:
         agent_configs: List[AgentActivityConfig]
     ) -> EventConfig:
         """
-        为初始帖子分配合适的发布者 Agent
+        为初始职业事件分配合适的发起者 Agent
         
-        根据每个帖子的 poster_type 匹配最合适的 agent_id
+        根据每个事件的 poster_type 匹配最合适的 agent_id
         """
         if not event_config.initial_posts:
             return event_config
@@ -805,7 +811,7 @@ class SimulationConfigGenerator:
                 "poster_agent_id": matched_agent_id
             })
             
-            logger.info(f"初始帖子分配: poster_type='{poster_type}' -> agent_id={matched_agent_id}")
+            logger.info(f"初始职业事件分配: poster_type='{poster_type}' -> agent_id={matched_agent_id}")
         
         event_config.initial_posts = updated_posts
         return event_config
@@ -830,7 +836,7 @@ class SimulationConfigGenerator:
                 "summary": e.summary[:summary_len] if e.summary else ""
             })
         
-        prompt = f"""基于以下信息，为每个实体生成社交媒体活动配置。
+        prompt = f"""基于以下信息，为每个实体生成职业平行宇宙活动配置。
 
 模拟需求: {simulation_requirement}
 
@@ -840,11 +846,11 @@ class SimulationConfigGenerator:
 ```
 
 ## 任务
-为每个实体生成活动配置，注意：
-- **时间符合目标用户群体作息**：以下为参考（东八区），请根据模拟场景调整
+为每个实体生成职业活动配置，注意：
+- **时间符合目标群体职业活跃规律**：以下为参考，请根据模拟场景调整
 - **官方机构**（University/GovernmentAgency）：活跃度低(0.1-0.3)，工作时间(9-17)活动，响应慢(60-240分钟)，影响力高(2.5-3.0)
 - **媒体**（MediaOutlet）：活跃度中(0.4-0.6)，全天活动(8-23)，响应快(5-30分钟)，影响力高(2.0-2.5)
-- **个人**（Student/Person/Alumni）：活跃度高(0.6-0.9)，主要晚间活动(18-23)，响应快(1-15分钟)，影响力低(0.8-1.2)
+- **个人**（Student/Person/Alumni）：活跃度高(0.6-0.9)，主要高峰期活动(18-23)，响应快(1-15分钟)，影响力低(0.8-1.2)
 - **公众人物/专家**：活跃度中(0.4-0.6)，影响力中高(1.5-2.0)
 
 返回JSON格式（不要markdown）：
@@ -853,9 +859,9 @@ class SimulationConfigGenerator:
         {{
             "agent_id": <必须与输入一致>,
             "activity_level": <0.0-1.0>,
-            "posts_per_hour": <发帖频率>,
-            "comments_per_hour": <评论频率>,
-            "active_hours": [<活跃小时列表，考虑中国人作息>],
+            "posts_per_hour": <职业事件频率>,
+            "comments_per_hour": <互动频率>,
+            "active_hours": [<活跃小时列表，考虑职业活跃规律>],
             "response_delay_min": <最小响应延迟分钟>,
             "response_delay_max": <最大响应延迟分钟>,
             "sentiment_bias": <-1.0到1.0>,
@@ -866,7 +872,7 @@ class SimulationConfigGenerator:
     ]
 }}"""
 
-        system_prompt = "你是社交媒体行为分析专家。返回纯JSON，配置需符合模拟场景中目标用户群体的作息习惯。"
+        system_prompt = "你是职业平行宇宙行为分析专家。返回纯JSON，配置需符合模拟场景中目标群体的职业活跃规律。"
         system_prompt = f"{system_prompt}\n\n{get_language_instruction()}\nIMPORTANT: The 'stance' field value MUST be one of the English strings: 'supportive', 'opposing', 'neutral', 'observer'. All JSON field names and numeric values must remain unchanged. Only natural language text fields should use the specified language."
 
         try:
@@ -906,7 +912,7 @@ class SimulationConfigGenerator:
         return configs
     
     def _generate_agent_config_by_rule(self, entity: EntityNode) -> Dict[str, Any]:
-        """基于规则生成单个Agent配置（中国人作息）"""
+        """基于规则生成单个Agent配置（职业平行宇宙活跃规律）"""
         entity_type = (entity.get_entity_type() or "Unknown").lower()
         
         if entity_type in ["university", "governmentagency", "ngo"]:
@@ -936,7 +942,7 @@ class SimulationConfigGenerator:
                 "influence_weight": 2.5
             }
         elif entity_type in ["professor", "expert", "official"]:
-            # 专家/教授：工作+晚间活动，中等频率
+            # 专家/教授：发展期+高峰期活动，中等频率
             return {
                 "activity_level": 0.4,
                 "posts_per_hour": 0.3,
@@ -949,12 +955,12 @@ class SimulationConfigGenerator:
                 "influence_weight": 2.0
             }
         elif entity_type in ["student"]:
-            # 学生：晚间为主，高频率
+            # 学生：高峰期为主，高频率
             return {
                 "activity_level": 0.8,
                 "posts_per_hour": 0.6,
                 "comments_per_hour": 1.5,
-                "active_hours": [8, 9, 10, 11, 12, 13, 18, 19, 20, 21, 22, 23],  # 上午+晚间
+                "active_hours": [8, 9, 10, 11, 12, 13, 18, 19, 20, 21, 22, 23],  # 发展期+高峰期
                 "response_delay_min": 1,
                 "response_delay_max": 15,
                 "sentiment_bias": 0.0,
@@ -962,12 +968,12 @@ class SimulationConfigGenerator:
                 "influence_weight": 0.8
             }
         elif entity_type in ["alumni"]:
-            # 校友：晚间为主
+            # 校友：高峰期为主
             return {
                 "activity_level": 0.6,
                 "posts_per_hour": 0.4,
                 "comments_per_hour": 0.8,
-                "active_hours": [12, 13, 19, 20, 21, 22, 23],  # 午休+晚间
+                "active_hours": [12, 13, 19, 20, 21, 22, 23],  # 午间+高峰期
                 "response_delay_min": 5,
                 "response_delay_max": 30,
                 "sentiment_bias": 0.0,
@@ -975,12 +981,12 @@ class SimulationConfigGenerator:
                 "influence_weight": 1.0
             }
         else:
-            # 普通人：晚间高峰
+            # 普通人：高峰期最活跃
             return {
                 "activity_level": 0.7,
                 "posts_per_hour": 0.5,
                 "comments_per_hour": 1.2,
-                "active_hours": [9, 10, 11, 12, 13, 18, 19, 20, 21, 22, 23],  # 白天+晚间
+                "active_hours": [9, 10, 11, 12, 13, 18, 19, 20, 21, 22, 23],  # 发展期+高峰期
                 "response_delay_min": 2,
                 "response_delay_max": 20,
                 "sentiment_bias": 0.0,

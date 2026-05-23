@@ -8,6 +8,7 @@ Zep检索工具服务
 3. QuickSearch（简单搜索）- 快速检索
 """
 
+import os
 import time
 import json
 from typing import Dict, Any, List, Optional
@@ -1313,12 +1314,38 @@ class ZepToolsService:
             interview_questions=custom_questions or []
         )
         
+        # Step 0: 快速检测模拟进程是否存活（避免后续LLM调用和IPC等待浪费时间）
+        sim_dir = os.path.join(SimulationRunner.RUN_STATE_DIR, simulation_id)
+        if not os.path.exists(sim_dir):
+            logger.warning(f"模拟目录不存在，跳过采访: {simulation_id}")
+            result.summary = "模拟环境不存在，无法进行采访。"
+            return result
+        
+        # 检查 env_status.json
+        env_status_file = os.path.join(sim_dir, "env_status.json")
+        if not os.path.exists(env_status_file):
+            logger.warning(f"模拟环境状态文件不存在，跳过采访: {simulation_id}")
+            result.summary = "模拟环境未运行（无状态文件），无法进行采访。"
+            return result
+        
+        try:
+            with open(env_status_file, 'r', encoding='utf-8') as f:
+                env_status = json.load(f)
+            if env_status.get("status") != "alive":
+                logger.warning(f"模拟环境已关闭，跳过采访: {simulation_id}, status={env_status.get('status')}")
+                result.summary = "模拟环境已关闭，无法进行采访。"
+                return result
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning(f"无法读取模拟状态文件，跳过采访: {e}")
+            result.summary = "无法确认模拟环境状态，跳过采访。"
+            return result
+        
         # Step 1: 读取人设文件
         profiles = self._load_agent_profiles(simulation_id)
         
         if not profiles:
             logger.warning(t("console.profilesNotFound", simId=simulation_id))
-            result.summary = "未找到可采访的Agent人设文件"
+            result.summary = "未找到可采访的人物卡文件"
             return result
         
         result.total_agents = len(profiles)
@@ -1380,7 +1407,7 @@ class ZepToolsService:
                 simulation_id=simulation_id,
                 interviews=interviews_request,
                 platform=None,  # 不指定platform，双平台采访
-                timeout=180.0   # 双平台需要更长超时
+                timeout=60.0    # 缩短超时，避免模拟进程僵死时长时间等待
             )
             
             logger.info(t("console.interviewApiReturned", count=api_result.get('interviews_count', 0), success=api_result.get('success')))

@@ -246,7 +246,7 @@
               <div class="detail-section">
                 <div class="detail-label">接口说明</div>
                 <div class="detail-content">
-                  上传文档后，LLM分析文档内容，自动生成适合舆论模拟的本体结构（实体类型 + 关系类型）
+                  上传文档或输入职业经历后，LLM分析内容，自动生成适合平行人生模拟的本体结构（实体类型 + 关系类型）
                 </div>
               </div>
               

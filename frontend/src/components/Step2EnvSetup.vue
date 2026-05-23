@@ -677,7 +677,7 @@ const customMaxRounds = ref(40)   // 默认推荐40轮
 
 // Watch stage to update phase
 watch(currentStage, (newStage) => {
-  if (newStage === '生成Agent人设' || newStage === 'generating_profiles') {
+  if (newStage === '生成人物卡' || newStage === 'generating_profiles') {
     phase.value = 1
   } else if (newStage === '生成模拟配置' || newStage === 'generating_config') {
     phase.value = 2

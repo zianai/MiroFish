@@ -1214,6 +1214,8 @@ async def run_twitter_simulation(
     time_config = config.get("time_config", {})
     total_hours = time_config.get("total_simulation_hours", 72)
     minutes_per_round = time_config.get("minutes_per_round", 30)
+    start_hour = time_config.get("start_hour", 0)
+    start_offset_minutes = start_hour * 60
     total_rounds = (total_hours * 60) // minutes_per_round
     
     # 如果指定了最大轮数，则截断
@@ -1232,7 +1234,7 @@ async def run_twitter_simulation(
                 main_logger.info(f"收到退出信号，在第 {round_num + 1} 轮停止模拟")
             break
         
-        simulated_minutes = round_num * minutes_per_round
+        simulated_minutes = start_offset_minutes + round_num * minutes_per_round
         simulated_hour = (simulated_minutes // 60) % 24
         simulated_day = simulated_minutes // (60 * 24) + 1
         
@@ -1413,6 +1415,8 @@ async def run_reddit_simulation(
     time_config = config.get("time_config", {})
     total_hours = time_config.get("total_simulation_hours", 72)
     minutes_per_round = time_config.get("minutes_per_round", 30)
+    start_hour = time_config.get("start_hour", 0)
+    start_offset_minutes = start_hour * 60
     total_rounds = (total_hours * 60) // minutes_per_round
     
     # 如果指定了最大轮数，则截断
@@ -1431,7 +1435,7 @@ async def run_reddit_simulation(
                 main_logger.info(f"收到退出信号，在第 {round_num + 1} 轮停止模拟")
             break
         
-        simulated_minutes = round_num * minutes_per_round
+        simulated_minutes = start_offset_minutes + round_num * minutes_per_round
         simulated_hour = (simulated_minutes // 60) % 24
         simulated_day = simulated_minutes // (60 * 24) + 1
         
@@ -1552,11 +1556,13 @@ async def main():
     time_config = config.get("time_config", {})
     total_hours = time_config.get('total_simulation_hours', 72)
     minutes_per_round = time_config.get('minutes_per_round', 30)
+    start_hour = time_config.get('start_hour', 0)
     config_total_rounds = (total_hours * 60) // minutes_per_round
     
     log_manager.info(f"模拟参数:")
     log_manager.info(f"  - 总模拟时长: {total_hours}小时")
     log_manager.info(f"  - 每轮时间: {minutes_per_round}分钟")
+    log_manager.info(f"  - 起始时刻: {start_hour}:00")
     log_manager.info(f"  - 配置总轮数: {config_total_rounds}")
     if args.max_rounds:
         log_manager.info(f"  - 最大轮数限制: {args.max_rounds}")

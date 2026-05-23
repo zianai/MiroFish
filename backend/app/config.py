@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 
 # 加载项目根目录的 .env 文件
-# 路径: MiroFish/.env (相对于 backend/app/config.py)
+# 路径: CareerVerse/.env (相对于 backend/app/config.py)
 project_root_env = os.path.join(os.path.dirname(__file__), '../../.env')
 
 if os.path.exists(project_root_env):
@@ -18,10 +18,15 @@ else:
 
 
 class Config:
-    """Flask配置类"""
+    """Flask配置类（CareerVerse 职业平行宇宙）"""
+    
+    # 产品配置
+    PRODUCT_NAME = "CareerVerse"
+    PRODUCT_NAME_ZH = "职业平行宇宙"
+    DEFAULT_SIMULATION_YEARS = 20  # 默认模拟年限
     
     # Flask配置
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'mirofish-secret-key')
+    SECRET_KEY=os.environ.get('SECRET_KEY', 'careerverse-secret-key')
     DEBUG = os.environ.get('FLASK_DEBUG', 'True').lower() == 'true'
     
     # JSON配置 - 禁用ASCII转义，让中文直接显示（而不是 \uXXXX 格式）

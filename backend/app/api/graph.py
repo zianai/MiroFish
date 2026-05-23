@@ -20,7 +20,7 @@ from ..models.task import TaskManager, TaskStatus
 from ..models.project import ProjectManager, ProjectStatus
 
 # 获取日志器
-logger = get_logger('mirofish.api')
+logger = get_logger('careerverse.api')
 
 
 def allowed_file(filename: str) -> bool:
@@ -117,7 +117,161 @@ def reset_project(project_id: str):
     })
 
 
-# ============== 接口1：上传文件并生成本体 ==============
+# ============== 接口1a：职业表单提交生成本体（CareerVerse新增） ==============
+
+@graph_bp.route('/ontology/generate-career', methods=['POST'])
+def generate_ontology_career():
+    """
+    接口1a：接收职业经历表单JSON，生成本体定义（CareerVerse专用）
+    
+    请求方式：application/json
+    
+    参数：
+        personal_info: {
+            name: "张三",
+            age: 28,
+            current_career: "软件工程师",
+            education: "计算机本科",
+            city: "北京"
+        }
+        key_decisions: [
+            {"age": 22, "decision": "毕业后进了互联网公司"},
+            {"age": 25, "decision": "没有选择出国留学"}
+        ]
+        divergence_point: {
+            age: 22,
+            description: "如果毕业时选择了考研而不是直接工作",
+            alternate_path: "考研读研 -> 学术路线"
+        }
+        additional_context: "我当年其实拿到了某大学的研究生offer..." (可选)
+        project_name: "我的平行人生" (可选)
+    
+    返回：同 /ontology/generate
+    """
+    try:
+        logger.info("=== 开始从职业表单生成本体定义 ===")
+        
+        data = request.get_json() or {}
+        personal_info = data.get('personal_info', {})
+        key_decisions = data.get('key_decisions', [])
+        divergence_point = data.get('divergence_point', {})
+        additional_context = data.get('additional_context', '')
+        project_name = data.get('project_name', '我的平行人生')
+        
+        # 验证必填字段
+        if not personal_info.get('name') or not personal_info.get('current_career'):
+            return jsonify({
+                "success": False,
+                "error": "请填写姓名和当前职业"
+            }), 400
+        
+        if not divergence_point.get('description'):
+            return jsonify({
+                "success": False,
+                "error": "请描述你想探索的分叉选择"
+            }), 400
+        
+        # 将表单数据转换为文本描述
+        simulation_requirement = _career_form_to_text(
+            personal_info, key_decisions, divergence_point, additional_context
+        )
+        
+        # 创建项目
+        project = ProjectManager.create_project(name=project_name)
+        project.simulation_requirement = simulation_requirement
+        project.career_form = data  # 保存原始表单数据
+        logger.info(f"创建项目: {project.project_id}")
+        
+        # 将表单文本保存为提取文本
+        ProjectManager.save_extracted_text(project.project_id, simulation_requirement)
+        project.total_text_length = len(simulation_requirement)
+        
+        # 生成本体
+        logger.info("调用 LLM 生成职业平行宇宙本体定义...")
+        generator = OntologyGenerator()
+        ontology = generator.generate(
+            document_texts=[simulation_requirement],
+            simulation_requirement=simulation_requirement,
+            additional_context=additional_context if additional_context else None
+        )
+        
+        # 保存本体到项目
+        entity_count = len(ontology.get("entity_types", []))
+        edge_count = len(ontology.get("edge_types", []))
+        logger.info(f"本体生成完成: {entity_count} 个实体类型, {edge_count} 个关系类型")
+        
+        project.ontology = {
+            "entity_types": ontology.get("entity_types", []),
+            "edge_types": ontology.get("edge_types", [])
+        }
+        project.analysis_summary = ontology.get("analysis_summary", "")
+        project.status = ProjectStatus.ONTOLOGY_GENERATED
+        ProjectManager.save_project(project)
+        logger.info(f"=== 职业表单本体生成完成 === 项目ID: {project.project_id}")
+        
+        return jsonify({
+            "success": True,
+            "data": {
+                "project_id": project.project_id,
+                "project_name": project.name,
+                "ontology": project.ontology,
+                "analysis_summary": project.analysis_summary,
+                "total_text_length": project.total_text_length
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
+def _career_form_to_text(personal_info, key_decisions, divergence_point, additional_context=''):
+    """将职业表单JSON转换为文本描述"""
+    parts = []
+    
+    # 基本信息
+    parts.append(f"=== 个人基本信息 ===")
+    parts.append(f"姓名：{personal_info.get('name', '未知')}")
+    parts.append(f"年龄：{personal_info.get('age', '未知')}")
+    parts.append(f"当前职业：{personal_info.get('current_career', '未知')}")
+    parts.append(f"教育背景：{personal_info.get('education', '未知')}")
+    parts.append(f"所在城市：{personal_info.get('city', '未知')}")
+    
+    # 关键决策
+    if key_decisions:
+        parts.append(f"\n=== 人生关键决策 ===")
+        for i, d in enumerate(key_decisions, 1):
+            age = d.get('age', '?')
+            decision = d.get('decision', '')
+            parts.append(f"{i}. {age}岁时：{decision}")
+    
+    # 分叉点
+    parts.append(f"\n=== 想要探索的分叉选择 ===")
+    parts.append(f"分叉年龄：{divergence_point.get('age', '未知')}岁")
+    parts.append(f"分叉描述：{divergence_point.get('description', '')}")
+    if divergence_point.get('alternate_path'):
+        parts.append(f"假设路径：{divergence_point.get('alternate_path')}")
+    
+    # 补充说明
+    if additional_context:
+        parts.append(f"\n=== 补充说明 ===")
+        parts.append(additional_context)
+    
+    # 模拟需求
+    parts.append(f"\n=== 模拟需求 ===")
+    parts.append(f"请模拟：如果{personal_info.get('name', '用户')}在{divergence_point.get('age', '某')}岁时"
+                 f"做了不同的选择（{divergence_point.get('description', '')}），"
+                 f"TA的人生轨迹会发生怎样的变化？")
+    parts.append(f"请构建一个包含职业路径、行业、公司、技能、城市、关键人物等要素的平行宇宙知识图谱，"
+                 f"用于模拟这个'如果当初选了另一条路'的平行人生。")
+    
+    return '\n'.join(parts)
+
+
+# ============== 接口1b：上传文件并生成本体（原版保留） ==============
 
 @graph_bp.route('/ontology/generate', methods=['POST'])
 def generate_ontology():
@@ -337,7 +491,7 @@ def build_graph():
             project.error = None
         
         # 获取配置
-        graph_name = data.get('graph_name', project.name or 'MiroFish Graph')
+        graph_name = data.get('graph_name', project.name or 'CareerVerse Graph')
         chunk_size = data.get('chunk_size', project.chunk_size or Config.DEFAULT_CHUNK_SIZE)
         chunk_overlap = data.get('chunk_overlap', project.chunk_overlap or Config.DEFAULT_CHUNK_OVERLAP)
         
@@ -377,7 +531,7 @@ def build_graph():
         # 启动后台任务
         def build_task():
             set_locale(current_locale)
-            build_logger = get_logger('mirofish.build')
+            build_logger = get_logger('careerverse.build')
             try:
                 build_logger.info(f"[{task_id}] 开始构建图谱...")
                 task_manager.update_task(
